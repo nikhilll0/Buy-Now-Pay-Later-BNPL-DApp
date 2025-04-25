@@ -1,97 +1,45 @@
+mapping(uint256 => bool) public defaulted;
 
-// SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+function markAsDefaulted(uint256 _purchaseId) external onlyOwner {
+    require(!purchases[_purchaseId].paid, "Already paid");
+    defaulted[_purchaseId] = true;
+}
+function getTotalOutstandingAmount(address _buyer) external view returns (uint256) {
+    uint256[] memory all = buyerPurchases[_buyer];
+    uint256 total;
 
-contract BNPL {
-    address public owner;
-
-    struct Purchase {
-        address buyer;
-        uint256 amount;
-        bool paid;
-    }
-
-    mapping(uint256 => Purchase) public purchases;
-    mapping(address => uint256[]) public buyerPurchases;
-    uint256 public purchaseCounter;
-
-    modifier onlyOwner() {
-        require(msg.sender == owner, "Only owner can call");
-        _;
-    }
-
-    constructor() {
-        owner = msg.sender;
-    }
-
-    function createPurchase(address _buyer, uint256 _amount) external onlyOwner {
-        purchases[purchaseCounter] = Purchase(_buyer, _amount, false);
-        buyerPurchases[_buyer].push(purchaseCounter);
-        purchaseCounter++;
-    }
-
-    function payLater(uint256 _purchaseId) external payable {
-        Purchase storage p = purchases[_purchaseId];
-        require(msg.sender == p.buyer, "Not the buyer");
-        require(!p.paid, "Already paid");
-        require(msg.value == p.amount, "Incorrect amount");
-
-        p.paid = true;
-    }
-
-    // 🔍 View all purchase IDs for the sender
-    function getMyPurchases() external view returns (uint256[] memory) {
-        return buyerPurchases[msg.sender];
-    }
-
-    // 💸 Refund a paid purchase (owner only)
-    function refund(uint256 _purchaseId) external onlyOwner {
-        Purchase storage p = purchases[_purchaseId];
-        require(p.paid, "Purchase is not paid");
-        p.paid = false;
-        payable(p.buyer).transfer(p.amount);
-    }
-
-    // 🔄 Update unpaid purchase amount (owner only)
-    function updatePurchaseAmount(uint256 _purchaseId, uint256 _newAmount) external onlyOwner {
-        Purchase storage p = purchases[_purchaseId];
-        require(!p.paid, "Can't update a paid purchase");
-        p.amount = _newAmount;
-    }
-
-    // 📤 Withdraw ETH from the contract (owner only)
-    function withdraw() external onlyOwner {
-        payable(owner).transfer(address(this).balance);
-    }
-
-    // 💰 View current contract balance
-    function getContractBalance() external view returns (uint256) {
-        return address(this).balance;
-    }
-
-    // 📋 Get all unpaid purchases for a buyer
-    function getOutstandingPurchases(address _buyer) external view returns (uint256[] memory) {
-        uint256[] memory all = buyerPurchases[_buyer];
-        uint256 count;
-        
-        // First pass to count
-        for (uint i = 0; i < all.length; i++) {
-            if (!purchases[all[i]].paid) {
-                count++;
-            }
+    for (uint i = 0; i < all.length; i++) {
+        if (!purchases[all[i]].paid) {
+            total += purchases[all[i]].amount;
         }
-
-        uint256[] memory result = new uint256[](count);
-        uint j;
-
-        // Second pass to collect unpaid IDs
-        for (uint i = 0; i < all.length; i++) {
-            if (!purchases[all[i]].paid) {
-                result[j] = all[i];
-                j++;
-            }
-        }
-
-        return result;
     }
+
+    return total;
+}
+function hasOutstandingPurchases(address _buyer) external view returns (bool) {
+    uint256[] memory all = buyerPurchases[_buyer];
+    for (uint i = 0; i < all.length; i++) {
+        if (!purchases[all[i]].paid) {
+            return true;
+        }
+    }
+    return false;
+}
+function transferPurchase(uint256 _purchaseId, address _newBuyer) external onlyOwner {
+    Purchase storage p = purchases[_purchaseId];
+    require(!p.paid, "Cannot transfer a paid purchase");
+
+    // Remove from current buyer list
+    uint256[] storage oldList = buyerPurchases[p.buyer];
+    for (uint i = 0; i < oldList.length; i++) {
+        if (oldList[i] == _purchaseId) {
+            oldList[i] = oldList[oldList.length - 1];
+            oldList.pop();
+            break;
+        }
+    }
+
+    // Add to new buyer list
+    buyerPurchases[_newBuyer].push(_purchaseId);
+    p.buyer = _newBuyer;
 }
