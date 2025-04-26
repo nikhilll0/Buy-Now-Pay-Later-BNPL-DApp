@@ -1,45 +1,47 @@
-mapping(uint256 => bool) public defaulted;
-
-function markAsDefaulted(uint256 _purchaseId) external onlyOwner {
-    require(!purchases[_purchaseId].paid, "Already paid");
-    defaulted[_purchaseId] = true;
+function markAsPaid(uint256 _purchaseId) external onlyOwner {
+    require(!purchases[_purchaseId].paid, "Already marked as paid");
+    purchases[_purchaseId].paid = true;
+    defaulted[_purchaseId] = false; // Clear default if it exists
 }
-function getTotalOutstandingAmount(address _buyer) external view returns (uint256) {
+function getPurchasesByBuyer(address _buyer) external view returns (uint256[] memory) {
+    return buyerPurchases[_buyer];
+}
+function getPurchaseDetails(uint256 _purchaseId) external view returns (
+    address buyer,
+    uint256 amount,
+    bool paid,
+    bool isDefaulted
+) {
+    Purchase memory p = purchases[_purchaseId];
+    return (p.buyer, p.amount, p.paid, defaulted[_purchaseId]);
+}
+function getTotalPaidAmount(address _buyer) external view returns (uint256) {
     uint256[] memory all = buyerPurchases[_buyer];
     uint256 total;
 
     for (uint i = 0; i < all.length; i++) {
-        if (!purchases[all[i]].paid) {
+        if (purchases[all[i]].paid) {
             total += purchases[all[i]].amount;
         }
     }
 
-    return total;
+    return total;
 }
-function hasOutstandingPurchases(address _buyer) external view returns (bool) {
-    uint256[] memory all = buyerPurchases[_buyer];
-    for (uint i = 0; i < all.length; i++) {
-        if (!purchases[all[i]].paid) {
-            return true;
-        }
-    }
-    return false;
-}
-function transferPurchase(uint256 _purchaseId, address _newBuyer) external onlyOwner {
+function deletePurchase(uint256 _purchaseId) external onlyOwner {
     Purchase storage p = purchases[_purchaseId];
-    require(!p.paid, "Cannot transfer a paid purchase");
+    require(!p.paid, "Cannot delete paid purchase");
 
-    // Remove from current buyer list
-    uint256[] storage oldList = buyerPurchases[p.buyer];
-    for (uint i = 0; i < oldList.length; i++) {
-        if (oldList[i] == _purchaseId) {
-            oldList[i] = oldList[oldList.length - 1];
-            oldList.pop();
+    // Remove from buyer's list
+    uint256[] storage list = buyerPurchases[p.buyer];
+    for (uint i = 0; i < list.length; i++) {
+        if (list[i] == _purchaseId) {
+            list[i] = list[list.length - 1];
+            list.pop();
             break;
         }
     }
 
-    // Add to new buyer list
-    buyerPurchases[_newBuyer].push(_purchaseId);
-    p.buyer = _newBuyer;
+    delete purchases[_purchaseId];
+    delete defaulted[_purchaseId];
 }
+
