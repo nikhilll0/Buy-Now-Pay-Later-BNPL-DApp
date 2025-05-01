@@ -23,5 +23,5 @@ This Solidity smart contract enables the management of purchases including marki
       uint256 amount;
       bool paid;
   }
-  contract address:- 0x83B548c21ECEF7A329D111B0E3d63700b8708F770 
+ contract address:- 0x83B548c21ECEF7A329D111B0E3d63700b8708F770
 ![Screenshot 2025-04-23 154211](https://github.com/user-attachments/assets/01418c1c-5081-4709-96ac-de3bd8c841d9)
